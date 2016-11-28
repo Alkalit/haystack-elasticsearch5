@@ -18,6 +18,8 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'haystack',
     'haystack_elasticsearch5',
+
+    'tests.test_app',
 ]
 
 MIDDLEWARE = [
