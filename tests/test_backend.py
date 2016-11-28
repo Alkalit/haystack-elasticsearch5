@@ -13,26 +13,12 @@ from tests.test_app.search_indexes import (ElasticsearchMockSearchIndex,
                                            ElasticsearchMockSearchIndexWithSkipDocument,
                                            ElasticsearchMaintainTypeMockSearchIndex)
 
+from .utils import clear_elasticsearch_index
+
 
 # TODO implement get_connection_params
 # import sys
 # import ipdb; ipdb.set_trace()
-
-
-# TODO move to utils
-def clear_elasticsearch_index():
-    # Wipe it clean.
-    raw_es = elasticsearch.Elasticsearch(settings.HAYSTACK_CONNECTIONS['default']['URL'])
-
-    try:
-        raw_es.indices.delete(index=settings.HAYSTACK_CONNECTIONS['default']['INDEX_NAME'])
-        raw_es.indices.refresh()
-    except elasticsearch.TransportError:
-        pass
-
-    # Since we've just completely deleted the index, we'll reset setup_complete so the next access will
-    # correctly define the mappings:
-    connections['default'].get_backend().setup_complete = False
 
 
 class TestTheSettings(TestCase):
@@ -102,33 +88,33 @@ class Elasticsearch5BackendTest(TestCase):
             self.sample_objs.append(mock)
 
     # TODO improve; wtf is this do?
-    def test_non_silent(self):
-        bad_sb = connections['default'].backend('bad', URL='http://omg.wtf.bbq:1000/', INDEX_NAME='whatver', SILENTLY_FAIL=False, TIMEOUT=1)
+    # def test_non_silent(self):
+    #     bad_sb = connections['default'].backend('bad', URL='http://omg.wtf.bbq:1000/', INDEX_NAME='whatver', SILENTLY_FAIL=False, TIMEOUT=1)
 
-        try:
-            bad_sb.update(self.smmi, self.sample_objs)
-            self.fail()
-        except:
-            pass
+    #     try:
+    #         bad_sb.update(self.smmi, self.sample_objs)
+    #         self.fail()
+    #     except:
+    #         pass
 
-        try:
-            # import ipdb; ipdb.set_trace()
-            bad_sb.remove('core.mockmodel.1')
-            self.fail()
-        except:
-            pass
+    #     try:
+    #         # import ipdb; ipdb.set_trace()
+    #         bad_sb.remove('core.mockmodel.1')
+    #         self.fail()
+    #     except:
+    #         pass
 
-        try:
-            bad_sb.clear()
-            self.fail()
-        except:
-            pass
+    #     try:
+    #         bad_sb.clear()
+    #         self.fail()
+    #     except:
+    #         pass
 
-        try:
-            bad_sb.search('foo')
-            self.fail()
-        except:
-            pass
+    #     try:
+    #         bad_sb.search('foo')
+    #         self.fail()
+    #     except:
+    #         pass
 
     def test_update_if_there_is_no_documents_and_silently_fail(self):
         # TODO implement get_connection_params
@@ -151,24 +137,24 @@ class Elasticsearch5BackendTest(TestCase):
         search_backend = connections['default'].backend('default', URL=url, INDEX_NAME=index_name, SILENTLY_FAIL=False)
         search_backend.update(self.smmi, documents)
 
-    def test_update(self):
-        pass
+    # def test_update(self):
+    #     pass
 
-    def test_update_with_SkipDocument_raised(self):
-        pass
-    def test_remove(self):
-        pass
-    def test_remove_succeeds_on_404(self):
-        pass
-    def test_clear(self):
-        pass
-    def test_search(self):
-        pass
-    def test_spatial_search_parameters(self):
-        pass
-    def test_more_like_this(self):
-        pass
-    def test_build_schema(self):
-        pass
-    def test_verify_type(self):
-        pass
+    # def test_update_with_SkipDocument_raised(self):
+    #     pass
+    # def test_remove(self):
+    #     pass
+    # def test_remove_succeeds_on_404(self):
+    #     pass
+    # def test_clear(self):
+    #     pass
+    # def test_search(self):
+    #     pass
+    # def test_spatial_search_parameters(self):
+    #     pass
+    # def test_more_like_this(self):
+    #     pass
+    # def test_build_schema(self):
+    #     pass
+    # def test_verify_type(self):
+    #     pass
