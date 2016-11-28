@@ -1,4 +1,6 @@
 
+import datetime
+
 from haystack.exceptions import SkipDocument
 from haystack import indexes
 
