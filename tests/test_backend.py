@@ -93,9 +93,12 @@ class Elasticsearch5BackendTest(TestCase):
 
     maxDiff = None
 
+
     def setUp(self):
 
         super(Elasticsearch5BackendTest, self).setUp()
+
+        self.bad_sb = connections['default'].backend('bad', URL='http://omg.wtf.bbq:1000/', INDEX_NAME='whatver', SILENTLY_FAIL=False, TIMEOUT=1)
 
         # Wipe it clean.
         self.raw_es = elasticsearch.Elasticsearch(settings.HAYSTACK_CONNECTIONS['default']['URL'])
@@ -137,56 +140,59 @@ class Elasticsearch5BackendTest(TestCase):
         except elasticsearch.TransportError:
             return {}
 
-    # TODO improve; wtf is this do?
-    # def test_non_silent(self):
-    #     bad_sb = connections['default'].backend('bad', URL='http://omg.wtf.bbq:1000/', INDEX_NAME='whatver', SILENTLY_FAIL=False, TIMEOUT=1)
+    def test_update_non_silent(self):
 
-    #     try:
-    #         bad_sb.update(self.smmi, self.sample_objs)
-    #         self.fail()
-    #     except:
-    #         pass
+        try:
+            self.bad_sb.update(self.smmi, self.sample_objs)
+            self.fail()
+        except:
+            pass
 
-    #     try:
-    #         # import ipdb; ipdb.set_trace()
-    #         bad_sb.remove('core.mockmodel.1')
-    #         self.fail()
-    #     except:
-    #         pass
+    def test_remove_non_silent(self):
 
-    #     try:
-    #         bad_sb.clear()
-    #         self.fail()
-    #     except:
-    #         pass
+        try:
+            self.bad_sb.remove('core.mockmodel.1')
+            self.fail()
+        except:
+            pass
 
-    #     try:
-    #         bad_sb.search('foo')
-    #         self.fail()
-    #     except:
-    #         pass
+    def test_clear_non_silent(self):
+
+        try:
+            self.bad_sb.clear()
+            self.fail()
+        except:
+            pass
+
+    def test_search_non_silent(self):
+
+        try:
+            self.bad_sb.search('foo')
+            self.fail()
+        except:
+            pass
 
     def test_update_if_there_is_no_documents_and_silently_fail(self):
-        # TODO implement get_connection_params
         url = settings.HAYSTACK_CONNECTIONS['default']['URL']
         index_name = settings.HAYSTACK_CONNECTIONS['default']['INDEX_NAME']
         documents = []
 
-        # import ipdb; ipdb.set_trace()
         search_backend = connections['default'].backend('default', URL=url, INDEX_NAME=index_name, SILENTLY_FAIL=True)
 
-            # update(index, iterable, commit=True)
         self.assertEqual(search_backend.update(self.smmi, documents), None)
 
     # TODO test logging
     def test_update_if_there_is_no_documents_and_not_silently_fail(self):
-        # TODO implement get_connection_params
         url = settings.HAYSTACK_CONNECTIONS['default']['URL']
         index_name = settings.HAYSTACK_CONNECTIONS['default']['INDEX_NAME']
         documents = []
 
+        # with self.assertLogs('elasticsearch') as cm:
+        # self.assertEqual(cm.output, ['GET http://127.0.0.1:9200/test_backend/_mapping [status:404 request:0.008s]'])
+
         search_backend = connections['default'].backend('default', URL=url, INDEX_NAME=index_name, SILENTLY_FAIL=False)
         search_backend.update(self.smmi, documents)
+
         self.assertEqual(search_backend.update(self.smmi, documents), None)
 
     def test_update(self):
