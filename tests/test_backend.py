@@ -285,12 +285,15 @@ class Elasticsearch5BackendTest(TestCase):
         self.search_backend.silently_fail = False
         self.search_backend.remove('test_app.mockmodel.421')
 
-    def test_clear(self):
+    def test_clear_all_documents(self):
+
         self.search_backend.update(self.smmi, self.sample_objs)
         self.assertEqual(self.raw_search('*:*').get('hits', {}).get('total', 0), 3)
 
         self.search_backend.clear()
         self.assertEqual(self.raw_search('*:*').get('hits', {}).get('total', 0), 0)
+
+    def test_clear_documents_of_model_that_does_not_have_them(self):
 
         self.search_backend.update(self.smmi, self.sample_objs)
         self.assertEqual(self.raw_search('*:*').get('hits', {}).get('total', 0), 3)
@@ -298,16 +301,21 @@ class Elasticsearch5BackendTest(TestCase):
         self.search_backend.clear([AnotherMockModel])
         self.assertEqual(self.raw_search('*:*').get('hits', {}).get('total', 0), 3)
 
-        # TODO
-        # self.search_backend.clear([MockModel])
-        # self.assertEqual(self.raw_search('*:*').get('hits', {}).get('total', 0), 0)
+    def test_clear(self):
 
         self.search_backend.update(self.smmi, self.sample_objs)
         self.assertEqual(self.raw_search('*:*').get('hits', {}).get('total', 0), 3)
 
         # TODO
-        # self.search_backend.clear([AnotherMockModel, MockModel])
-        # self.assertEqual(self.raw_search('*:*').get('hits', {}).get('total', 0), 0)
+        self.search_backend.clear([MockModel])
+        self.assertEqual(self.raw_search('*:*').get('hits', {}).get('total', 0), 0)
+
+        self.search_backend.update(self.smmi, self.sample_objs)
+        self.assertEqual(self.raw_search('*:*').get('hits', {}).get('total', 0), 3)
+
+        # TODO
+        self.search_backend.clear([AnotherMockModel, MockModel])
+        self.assertEqual(self.raw_search('*:*').get('hits', {}).get('total', 0), 0)
 
     # TODO
     # def test_search(self):
@@ -316,14 +324,22 @@ class Elasticsearch5BackendTest(TestCase):
 
     #     self.assertEqual(self.search_backend.search(''), {'hits': 0, 'results': []})
     #     self.assertEqual(self.search_backend.search('*:*')['hits'], 3)
+
     #     self.assertEqual(set([result.pk for result in self.search_backend.search('*:*')['results']]), set([u'2', u'1', u'3']))
 
     #     self.assertEqual(self.search_backend.search('', highlight=True), {'hits': 0, 'results': []})
     #     self.assertEqual(self.search_backend.search('Index', highlight=True)['hits'], 3)
-    #     self.assertEqual(sorted([result.highlighted[0] for result in self.search_backend.search('Index', highlight=True)['results']]),
-    #                      [u'<em>Indexed</em>!\n1', u'<em>Indexed</em>!\n2', u'<em>Indexed</em>!\n3'])
-    #     self.assertEqual(sorted([result.highlighted[0] for result in self.search_backend.search('Index', highlight={'pre_tags': ['<start>'],'post_tags': ['</end>']})['results']]),
-    #                      [u'<start>Indexed</end>!\n1', u'<start>Indexed</end>!\n2', u'<start>Indexed</end>!\n3'])
+
+    #     self.assertEqual(
+    #             sorted([result.highlighted[0] for result in self.search_backend.search('Index', highlight=True)['results']]),
+    #             [u'<em>Indexed</em>!\n1', u'<em>Indexed</em>!\n2', u'<em>Indexed</em>!\n3']
+    #      )
+
+
+    #     self.assertEqual(
+    #             sorted([result.highlighted[0] for result in self.search_backend.search('Index', highlight={'pre_tags': ['<start>'],'post_tags': ['</end>']})['results']]),
+    #             [u'<start>Indexed</end>!\n1', u'<start>Indexed</end>!\n2', u'<start>Indexed</end>!\n3']
+    #      )
 
 
     #     self.assertEqual(self.search_backend.search('Indx')['hits'], 0)
@@ -387,9 +403,9 @@ class Elasticsearch5BackendTest(TestCase):
 
     #     self.assertDictEqual(geo_d, {'location': [1.23, 4.56], 'unit': 'km', 'order': 'desc'})
 
-    def test_more_like_this(self):
-        self.search_backend.update(self.smmi, self.sample_objs)
-        self.assertEqual(self.raw_search('*:*')['hits']['total'], 3)
+    # def test_more_like_this(self):
+    #     self.search_backend.update(self.smmi, self.sample_objs)
+    #     self.assertEqual(self.raw_search('*:*')['hits']['total'], 3)
 
         # A functional MLT example with enough data to work is below. Rely on
         # this to ensure the API is correct enough.
@@ -397,13 +413,12 @@ class Elasticsearch5BackendTest(TestCase):
         # self.assertEqual(self.search_backend.more_like_this(self.sample_objs[0])['hits'], 0)
         # self.assertEqual([result.pk for result in self.search_backend.more_like_this(self.sample_objs[0])['results']], [])
 
-    # TODO split
-    def test_build_schema(self):
-        old_ui = connections['default'].get_unified_index()
+    def test_build_schema_from_unified_index(self):
+        unified_index = connections['default'].get_unified_index()
 
-        (content_field_name, mapping) = self.search_backend.build_schema(old_ui.all_searchfields())
+        content_field_name, mapping = self.search_backend.build_schema(unified_index.all_searchfields())
+
         self.assertEqual(content_field_name, 'text')
-        self.assertEqual(len(mapping), 4 + 2)  # +2 management fields
         self.assertEqual(mapping, {
             'django_id': {'index': 'not_analyzed', 'type': 'string', 'include_in_all': False},
             'django_ct': {'index': 'not_analyzed', 'type': 'string', 'include_in_all': False},
@@ -413,11 +428,14 @@ class Elasticsearch5BackendTest(TestCase):
             'name_exact': {'index': 'not_analyzed', 'type': 'string'}
         })
 
-        ui = UnifiedIndex()
-        ui.build(indexes=[ElasticsearchComplexFacetsMockSearchIndex()])
-        (content_field_name, mapping) = self.search_backend.build_schema(ui.all_searchfields())
+    def test_build_schema_from_custom_unified_index(self):
+
+        custom_ui = UnifiedIndex()
+        custom_ui.build(indexes=[ElasticsearchComplexFacetsMockSearchIndex()])
+
+        content_field_name, mapping = self.search_backend.build_schema(custom_ui.all_searchfields())
+
         self.assertEqual(content_field_name, 'text')
-        self.assertEqual(len(mapping), 15 + 2)  # +2 management fields
         self.assertEqual(mapping, {
             'django_id': {'index': 'not_analyzed', 'type': 'string', 'include_in_all': False},
             'django_ct': {'index': 'not_analyzed', 'type': 'string', 'include_in_all': False},
@@ -438,22 +456,21 @@ class Elasticsearch5BackendTest(TestCase):
             'average_rating_exact': {'type': 'float'}
         })
 
+    # XXX what for?
     def test_verify_type(self):
-        old_ui = connections['default'].get_unified_index()
-        ui = UnifiedIndex()
+
+        new_unified_index = UnifiedIndex()
         smtmmi = ElasticsearchMaintainTypeMockSearchIndex()
+        new_unified_index.build(indexes=[smtmmi]) # populate index
 
-        ui.build(indexes=[smtmmi])
+        connections['default']._index = new_unified_index
+        search_backend = connections['default'].get_backend()
 
-        connections['default']._index = ui
-        sb = connections['default'].get_backend()
-        sb.update(smtmmi, self.sample_objs)
+        search_backend.update(smtmmi, self.sample_objs)
 
-        # TODO
-        # self.assertEqual(sb.search('*:*')['hits'], 3)
-        # self.assertEqual([result.month for result in sb.search('*:*')['results']], [u'02', u'02', u'02'])
+        results = [result['_source']['month'] for result in self.raw_search('*:*')['hits']['hits']]
 
-        connections['default']._index = old_ui
+        self.assertEqual(results, [u'02', u'02', u'02'])
 
 
 # class FailedElasticsearchSearchBackendTestCase(TestCase):
