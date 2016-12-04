@@ -10,6 +10,8 @@ from django.conf import settings
 from django.apps import apps
 from django.test.utils import override_settings
 
+from elasticsearch.exceptions import ConnectionError
+
 from haystack import connections, reset_search_queries
 from haystack.utils.loading import UnifiedIndex
 from haystack.utils import log as logging
@@ -140,37 +142,29 @@ class Elasticsearch5BackendTest(TestCase):
         except elasticsearch.TransportError:
             return {}
 
+    # TODO mb test logs
     def test_update_non_silent(self):
 
-        try:
+        with self.assertRaises(ConnectionError):
             self.bad_sb.update(self.smmi, self.sample_objs)
-            self.fail()
-        except:
-            pass
 
+    # TODO mb test logs
     def test_remove_non_silent(self):
 
-        try:
+        with self.assertRaises(ConnectionError):
             self.bad_sb.remove('core.mockmodel.1')
-            self.fail()
-        except:
-            pass
 
+    # TODO mb test logs
     def test_clear_non_silent(self):
 
-        try:
+        with self.assertRaises(ConnectionError):
             self.bad_sb.clear()
-            self.fail()
-        except:
-            pass
 
+    # TODO mb test logs
     def test_search_non_silent(self):
 
-        try:
+        with self.assertRaises(ConnectionError):
             self.bad_sb.search('foo')
-            self.fail()
-        except:
-            pass
 
     def test_update_if_there_is_no_documents_and_silently_fail(self):
         url = settings.HAYSTACK_CONNECTIONS['default']['URL']
@@ -301,6 +295,7 @@ class Elasticsearch5BackendTest(TestCase):
         self.search_backend.clear([AnotherMockModel])
         self.assertEqual(self.raw_search('*:*').get('hits', {}).get('total', 0), 3)
 
+    # TODO
     def test_clear(self):
 
         self.search_backend.update(self.smmi, self.sample_objs)
@@ -317,72 +312,111 @@ class Elasticsearch5BackendTest(TestCase):
         self.search_backend.clear([AnotherMockModel, MockModel])
         self.assertEqual(self.raw_search('*:*').get('hits', {}).get('total', 0), 0)
 
-    # TODO
-    # def test_search(self):
-    #     self.search_backend.update(self.smmi, self.sample_objs)
-    #     self.assertEqual(self.raw_search('*:*')['hits']['total'], 3)
+    def test_search_an_empty_string(self):
+        self.search_backend.update(self.smmi, self.sample_objs)
+        self.assertEqual(self.search_backend.search(''), {'hits': 0, 'results': []})
 
-    #     self.assertEqual(self.search_backend.search(''), {'hits': 0, 'results': []})
-    #     self.assertEqual(self.search_backend.search('*:*')['hits'], 3)
+    def test_search_all_documents(self):
+        self.search_backend.update(self.smmi, self.sample_objs)
+        self.assertEqual(self.search_backend.search('*:*')['hits'], 3)
+        self.assertEqual(set([result.pk for result in self.search_backend.search('*:*')['results']]), set([u'2', u'1', u'3']))
 
-    #     self.assertEqual(set([result.pk for result in self.search_backend.search('*:*')['results']]), set([u'2', u'1', u'3']))
+    def test_search_an_empty_string_with_highlight(self):
+        self.search_backend.update(self.smmi, self.sample_objs)
+        self.assertEqual(self.search_backend.search('', highlight=True), {'hits': 0, 'results': []})
 
-    #     self.assertEqual(self.search_backend.search('', highlight=True), {'hits': 0, 'results': []})
-    #     self.assertEqual(self.search_backend.search('Index', highlight=True)['hits'], 3)
+    def test_search_highlight(self):
+        self.search_backend.update(self.smmi, self.sample_objs)
 
-    #     self.assertEqual(
-    #             sorted([result.highlighted[0] for result in self.search_backend.search('Index', highlight=True)['results']]),
-    #             [u'<em>Indexed</em>!\n1', u'<em>Indexed</em>!\n2', u'<em>Indexed</em>!\n3']
-    #      )
+        self.assertEqual(
+                sorted([result.highlighted[0] for result in self.search_backend.search('Index', highlight=True)['results']]),
+                [u'<em>Indexed</em>!\n1\n', u'<em>Indexed</em>!\n2\n', u'<em>Indexed</em>!\n3\n']
+         )
 
+    def test_search_highlight_with_custom_tags(self):
+        self.search_backend.update(self.smmi, self.sample_objs)
 
-    #     self.assertEqual(
-    #             sorted([result.highlighted[0] for result in self.search_backend.search('Index', highlight={'pre_tags': ['<start>'],'post_tags': ['</end>']})['results']]),
-    #             [u'<start>Indexed</end>!\n1', u'<start>Indexed</end>!\n2', u'<start>Indexed</end>!\n3']
-    #      )
+        self.assertEqual(
+                sorted([result.highlighted[0] for result in self.search_backend.search('Index', highlight={'pre_tags': ['<start>'],'post_tags': ['</end>']})['results']]),
+                [u'<start>Indexed</end>!\n1\n', u'<start>Indexed</end>!\n2\n', u'<start>Indexed</end>!\n3\n']
+         )
 
+    def test_spelling_if_spelling_does_not_set(self):
+        self.search_backend.update(self.smmi, self.sample_objs)
+        self.assertEqual(self.search_backend.search('Indx')['hits'], 0)
 
-    #     self.assertEqual(self.search_backend.search('Indx')['hits'], 0)
-    #     self.assertEqual(self.search_backend.search('indaxed')['spelling_suggestion'], 'indexed')
-    #     self.assertEqual(self.search_backend.search('arf', spelling_query='indexyd')['spelling_suggestion'], 'indexed')
+    def test_spelling1(self):
+        self.search_backend.update(self.smmi, self.sample_objs)
+        self.assertEqual(self.search_backend.search('indaxed')['spelling_suggestion'], 'indexed')
 
-    #     self.assertEqual(self.search_backend.search('', facets={'name': {}}), {'hits': 0, 'results': []})
-    #     results = self.search_backend.search('Index', facets={'name': {}})
-    #     self.assertEqual(results['hits'], 3)
-    #     self.assertEqual(results['facets']['fields']['name'], [('daniel3', 1), ('daniel2', 1), ('daniel1', 1)])
+    def test_spelling2(self):
+        self.search_backend.update(self.smmi, self.sample_objs)
+        self.assertEqual(self.search_backend.search('arf', spelling_query='indexyd')['spelling_suggestion'], 'indexed')
 
-    #     self.assertEqual(self.search_backend.search('', date_facets={'pub_date': {'start_date': datetime.date(2008, 1, 1), 'end_date': datetime.date(2009, 4, 1), 'gap_by': 'month', 'gap_amount': 1}}), {'hits': 0, 'results': []})
-    #     results = self.search_backend.search('Index', date_facets={'pub_date': {'start_date': datetime.date(2008, 1, 1), 'end_date': datetime.date(2009, 4, 1), 'gap_by': 'month', 'gap_amount': 1}})
-    #     self.assertEqual(results['hits'], 3)
-    #     self.assertEqual(results['facets']['dates']['pub_date'], [(datetime.datetime(2009, 2, 1, 0, 0), 3)])
+    def test_facet_search1(self):
+        self.search_backend.update(self.smmi, self.sample_objs)
+        self.assertEqual(self.search_backend.search('', facets={'name': {}}), {'hits': 0, 'results': []})
 
-    #     self.assertEqual(self.search_backend.search('', query_facets=[('name', '[* TO e]')]), {'hits': 0, 'results': []})
-    #     results = self.search_backend.search('Index', query_facets=[('name', '[* TO e]')])
-    #     self.assertEqual(results['hits'], 3)
-    #     self.assertEqual(results['facets']['queries'], {u'name': 3})
+    def test_facet_search2(self):
+        self.search_backend.update(self.smmi, self.sample_objs)
 
-    #     self.assertEqual(self.search_backend.search('', narrow_queries=set(['name:daniel1'])), {'hits': 0, 'results': []})
-    #     results = self.search_backend.search('Index', narrow_queries=set(['name:daniel1']))
-    #     self.assertEqual(results['hits'], 1)
+        results = self.search_backend.search('Index', facets={'name': {}})
+        self.assertEqual(results['facets']['fields']['name'], [('daniel3', 1), ('daniel2', 1), ('daniel1', 1)])
 
-    #     # Ensure that swapping the ``result_class`` works.
-    #     self.assertTrue(isinstance(self.search_backend.search(u'index', result_class=MockSearchResult)['results'][0], MockSearchResult))
+    def test_facet_search3(self):
+        self.search_backend.update(self.smmi, self.sample_objs)
 
-    #     # Check the use of ``limit_to_registered_models``.
-    #     self.assertEqual(self.search_backend.search('', limit_to_registered_models=False), {'hits': 0, 'results': []})
-    #     self.assertEqual(self.search_backend.search('*:*', limit_to_registered_models=False)['hits'], 3)
-    #     self.assertEqual(sorted([result.pk for result in self.search_backend.search('*:*', limit_to_registered_models=False)['results']]), ['1', '2', '3'])
+        results = self.search_backend.search('Index', facets={'name': {}})
+        self.assertEqual(self.search_backend.search('', date_facets={'pub_date': {'start_date': datetime.date(2008, 1, 1), 'end_date': datetime.date(2009, 4, 1), 'gap_by': 'month', 'gap_amount': 1}}), {'hits': 0, 'results': []})
 
-    #     # Stow.
-    #     old_limit_to_registered_models = getattr(settings, 'HAYSTACK_LIMIT_TO_REGISTERED_MODELS', True)
-    #     settings.HAYSTACK_LIMIT_TO_REGISTERED_MODELS = False
+    def test_facet_search4(self):
+        self.search_backend.update(self.smmi, self.sample_objs)
 
-    #     self.assertEqual(self.search_backend.search(''), {'hits': 0, 'results': []})
-    #     self.assertEqual(self.search_backend.search('*:*')['hits'], 3)
-    #     self.assertEqual(sorted([result.pk for result in self.search_backend.search('*:*')['results']]), ['1', '2', '3'])
+        results = self.search_backend.search('Index', date_facets={'pub_date': {'start_date': datetime.date(2008, 1, 1), 'end_date': datetime.date(2009, 4, 1), 'gap_by': 'month', 'gap_amount': 1}})
+        self.assertEqual(results['facets']['dates']['pub_date'], [(datetime.datetime(2009, 2, 1, 0, 0), 3)])
 
-    #     # Restore.
-    #     settings.HAYSTACK_LIMIT_TO_REGISTERED_MODELS = old_limit_to_registered_models
+    def test_facet_search5(self):
+        self.search_backend.update(self.smmi, self.sample_objs)
+
+        self.assertEqual(self.search_backend.search('', query_facets=[('name', '[* TO e]')]), {'hits': 0, 'results': []})
+
+    def test_facet_search6(self):
+        self.search_backend.update(self.smmi, self.sample_objs)
+
+        results = self.search_backend.search('Index', query_facets=[('name', '[* TO e]')])
+        self.assertEqual(results['facets']['queries'], {u'name': 3})
+
+    def test_narrow1(self):
+        self.search_backend.update(self.smmi, self.sample_objs)
+
+        results = self.search_backend.search('Index', narrow_queries=set(['name:daniel1']))
+        self.assertEqual(results['hits'], 1)
+
+    def test_narrow2(self):
+        self.search_backend.update(self.smmi, self.sample_objs)
+
+        results = self.search_backend.search('Index', query_facets=[('name', '[* TO e]')])
+        self.assertEqual(self.search_backend.search('', narrow_queries=set(['name:daniel1'])), {'hits': 0, 'results': []})
+
+    def test_ensure_that_swapping_the_result_class_works(self):
+        self.assertTrue(isinstance(self.search_backend.search(u'index', result_class=MockSearchResult)['results'][0], MockSearchResult))
+
+    def test_check_the_use_limit_to_registered_models1(self):
+        self.assertEqual(self.search_backend.search('', limit_to_registered_models=False), {'hits': 0, 'results': []})
+        self.assertEqual(self.search_backend.search('*:*', limit_to_registered_models=False)['hits'], 3)
+        self.assertEqual(sorted([result.pk for result in self.search_backend.search('*:*', limit_to_registered_models=False)['results']]), ['1', '2', '3'])
+
+    def test_check_the_use_limit_to_registered_models2(self):
+        old_limit_to_registered_models = getattr(settings, 'HAYSTACK_LIMIT_TO_REGISTERED_MODELS', True)
+        settings.HAYSTACK_LIMIT_TO_REGISTERED_MODELS = False
+
+        self.assertEqual(self.search_backend.search(''), {'hits': 0, 'results': []})
+        self.assertEqual(self.search_backend.search('*:*')['hits'], 3)
+        self.assertEqual(sorted([result.pk for result in self.search_backend.search('*:*')['results']]), ['1', '2', '3'])
+
+        # Restore.
+        settings.HAYSTACK_LIMIT_TO_REGISTERED_MODELS = old_limit_to_registered_models
+
 
     # TODO
     # def test_spatial_search_parameters(self):
@@ -414,29 +448,32 @@ class Elasticsearch5BackendTest(TestCase):
         # self.assertEqual([result.pk for result in self.search_backend.more_like_this(self.sample_objs[0])['results']], [])
 
     def test_build_schema_from_unified_index(self):
+
         unified_index = connections['default'].get_unified_index()
 
-        content_field_name, mapping = self.search_backend.build_schema(unified_index.all_searchfields())
+        content_field_name, current_mapping = self.search_backend.build_schema(unified_index.all_searchfields())
 
-        self.assertEqual(content_field_name, 'text')
-        self.assertEqual(mapping, {
+        expected_mapping = {
             'django_id': {'index': 'not_analyzed', 'type': 'string', 'include_in_all': False},
             'django_ct': {'index': 'not_analyzed', 'type': 'string', 'include_in_all': False},
             'text': {'type': 'string', 'analyzer': 'snowball'},
             'pub_date': {'type': 'date'},
             'name': {'type': 'string', 'analyzer': 'snowball'},
             'name_exact': {'index': 'not_analyzed', 'type': 'string'}
-        })
+        }
+
+        self.assertEqual(content_field_name, 'text')
+        self.assertEqual(current_mapping, expected_mapping)
 
     def test_build_schema_from_custom_unified_index(self):
 
         custom_ui = UnifiedIndex()
         custom_ui.build(indexes=[ElasticsearchComplexFacetsMockSearchIndex()])
 
-        content_field_name, mapping = self.search_backend.build_schema(custom_ui.all_searchfields())
+        content_field_name, current_mapping = self.search_backend.build_schema(custom_ui.all_searchfields())
 
         self.assertEqual(content_field_name, 'text')
-        self.assertEqual(mapping, {
+        expected_mapping = {
             'django_id': {'index': 'not_analyzed', 'type': 'string', 'include_in_all': False},
             'django_ct': {'index': 'not_analyzed', 'type': 'string', 'include_in_all': False},
             'name': {'type': 'string', 'analyzer': 'snowball'},
@@ -454,7 +491,8 @@ class Elasticsearch5BackendTest(TestCase):
             'name_exact': {'index': 'not_analyzed', 'type': 'string'},
             'pub_date': {'type': 'date'},
             'average_rating_exact': {'type': 'float'}
-        })
+        }
+        self.assertEqual(current_mapping, expected_mapping)
 
     # XXX what for?
     def test_verify_type(self):
