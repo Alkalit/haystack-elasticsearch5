@@ -470,13 +470,13 @@ class Elasticsearch5BackendTest(TestCase):
         content_field_name, current_mapping = self.search_backend.build_schema(unified_index.all_searchfields())
 
         expected_mapping = {
-            'django_id': {'index': 'not_analyzed', 'type': 'string', 'include_in_all': False},
-            'django_ct': {'index': 'not_analyzed', 'type': 'string', 'include_in_all': False},
-            'text': {'type': 'string', 'analyzer': 'snowball'},
+            'django_id': {'include_in_all': False, 'index': 'not_analyzed', 'type': 'text'},
+            'django_ct': {'include_in_all': False, 'index': 'not_analyzed', 'type': 'text'},
+            'text': {'analyzer': 'snowball', 'fielddata': True, 'type': 'text'},
             'pub_date': {'type': 'date'},
-            'name': {'type': 'string', 'analyzer': 'snowball'},
-            'name_exact': {'index': 'not_analyzed', 'type': 'string'}
-        }
+            'name': {'analyzer': 'snowball', 'fielddata': True, 'type': 'text'},
+            'name_exact': {'fielddata': True, 'index': 'not_analyzed', 'type': 'text'},
+         }
 
         self.assertEqual(content_field_name, 'text')
         self.assertEqual(current_mapping, expected_mapping)
@@ -490,21 +490,21 @@ class Elasticsearch5BackendTest(TestCase):
 
         self.assertEqual(content_field_name, 'text')
         expected_mapping = {
-            'django_id': {'index': 'not_analyzed', 'type': 'string', 'include_in_all': False},
-            'django_ct': {'index': 'not_analyzed', 'type': 'string', 'include_in_all': False},
-            'name': {'type': 'string', 'analyzer': 'snowball'},
+            'django_id': {'index': 'not_analyzed', 'type': 'text', 'include_in_all': False},
+            'django_ct': {'index': 'not_analyzed', 'type': 'text', 'include_in_all': False},
+            'name': {'type': 'text', 'analyzer': 'snowball', 'fielddata': True},
             'is_active_exact': {'type': 'boolean'},
             'created': {'type': 'date'},
             'post_count': {'type': 'long'},
             'created_exact': {'type': 'date'},
-            'sites_exact': {'index': 'not_analyzed', 'type': 'string'},
+            'sites_exact': {'index': 'not_analyzed', 'type': 'text', 'fielddata': True},
             'is_active': {'type': 'boolean'},
-            'sites': {'type': 'string', 'analyzer': 'snowball'},
+            'sites': {'type': 'text', 'analyzer': 'snowball', 'fielddata': True},
             'post_count_i': {'type': 'long'},
             'average_rating': {'type': 'float'},
-            'text': {'type': 'string', 'analyzer': 'snowball'},
+            'text': {'type': 'text', 'analyzer': 'snowball', 'fielddata': True},
             'pub_date_exact': {'type': 'date'},
-            'name_exact': {'index': 'not_analyzed', 'type': 'string'},
+            'name_exact': {'index': 'not_analyzed', 'type': 'text', 'fielddata': True},
             'pub_date': {'type': 'date'},
             'average_rating_exact': {'type': 'float'}
         }
