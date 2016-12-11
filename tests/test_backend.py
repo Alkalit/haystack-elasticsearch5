@@ -51,8 +51,8 @@ except ImportError:
 # TODO implement get_connection_params
 # TODO spelling suggestion should be test with both status of the INCLUDE_SPELLING;
 # current is always True
-# import sys
-# import ipdb; ipdb.set_trace()
+# TODO The [string] field is deprecated, please use [text] or [keyword] instead on [django_ct]
+# TODO https://www.elastic.co/guide/en/elasticsearch/reference/5.0/fielddata.html#_fielddata_is_disabled_on_literal_text_literal_fields_by_default
 
 
 class CaptureHandler(std_logging.Handler):
@@ -302,14 +302,15 @@ class Elasticsearch5BackendTest(TestCase):
         self.search_backend.update(self.smmi, self.sample_objs)
         self.assertEqual(self.raw_search('*:*').get('hits', {}).get('total', 0), 3)
 
-        # TODO
         self.search_backend.clear([MockModel])
         self.assertEqual(self.raw_search('*:*').get('hits', {}).get('total', 0), 0)
 
         self.search_backend.update(self.smmi, self.sample_objs)
         self.assertEqual(self.raw_search('*:*').get('hits', {}).get('total', 0), 3)
 
-        # TODO
+    def test_clean_should_work_if_some_model_documents_does_not_exist(self):
+        self.search_backend.update(self.smmi, self.sample_objs)
+
         self.search_backend.clear([AnotherMockModel, MockModel])
         self.assertEqual(self.raw_search('*:*').get('hits', {}).get('total', 0), 0)
 
@@ -362,8 +363,11 @@ class Elasticsearch5BackendTest(TestCase):
     def test_facet_search2(self):
         self.search_backend.update(self.smmi, self.sample_objs)
 
-        results = self.search_backend.search('Index', facets={'name': {}})
-        self.assertEqual(results['facets']['fields']['name'], [('daniel3', 1), ('daniel2', 1), ('daniel1', 1)])
+        response = self.search_backend.search('Index', facets={'name': {}})
+        result = sorted(response['facets']['fields']['name'])
+        expected = [('daniel1', 1), ('daniel2', 1), ('daniel3', 1)]
+
+        self.assertEqual(result, expected)
 
     def test_facet_search3(self):
         self.search_backend.update(self.smmi, self.sample_objs)
@@ -401,12 +405,21 @@ class Elasticsearch5BackendTest(TestCase):
         self.assertEqual(self.search_backend.search('', narrow_queries=set(['name:daniel1'])), {'hits': 0, 'results': []})
 
     def test_ensure_that_swapping_the_result_class_works(self):
-        self.assertTrue(isinstance(self.search_backend.search(u'index', result_class=MockSearchResult)['results'][0], MockSearchResult))
+
+        self.search_backend.update(self.smmi, self.sample_objs)
+        swapped = self.search_backend.search(u'index', result_class=MockSearchResult)['results'][0]
+
+        self.assertIsInstance(swapped, MockSearchResult)
 
     def test_check_the_use_limit_to_registered_models1(self):
+        self.search_backend.update(self.smmi, self.sample_objs)
+
         self.assertEqual(self.search_backend.search('', limit_to_registered_models=False), {'hits': 0, 'results': []})
-        self.assertEqual(self.search_backend.search('*:*', limit_to_registered_models=False)['hits'], 3)
-        self.assertEqual(sorted([result.pk for result in self.search_backend.search('*:*', limit_to_registered_models=False)['results']]), ['1', '2', '3'])
+
+        result = sorted([result.pk for result in self.search_backend.search('*:*', limit_to_registered_models=False)['results']])
+        expected = ['1', '2', '3']
+
+        self.assertEqual(result, expected)
 
     @override_settings(HAYSTACK_LIMIT_TO_REGISTERED_MODELS=False)
     def test_check_the_use_limit_to_registered_models2(self):

@@ -1,5 +1,7 @@
 import warnings
 
+from datetime import datetime, timedelta
+
 import elasticsearch
 
 from django.conf import settings
@@ -8,14 +10,52 @@ import haystack
 from haystack.backends.elasticsearch_backend import ElasticsearchSearchBackend, ElasticsearchSearchQuery
 from haystack.backends import BaseEngine, log_query
 from haystack.models import SearchResult
-from haystack.constants import DEFAULT_OPERATOR, DJANGO_CT, FUZZY_MAX_EXPANSIONS, FUZZY_MIN_SIM
+from haystack.constants import DEFAULT_OPERATOR, DJANGO_CT, DJANGO_ID, FUZZY_MAX_EXPANSIONS
 from haystack.utils import get_model_ct
+from haystack.utils.app_loading import haystack_get_model
 
 
 __all__ = ['Elasticsearch5SearchBackend', 'Elasticsearch5SearchEngine']
 
+DEFAULT_FIELD_MAPPING = {'type': 'text', 'analyzer': 'snowball', 'fielddata': True}
+FIELD_MAPPINGS = {
+    'edge_ngram': {'type': 'text', 'analyzer': 'edgengram_analyzer'},
+    'ngram':      {'type': 'text', 'analyzer': 'ngram_analyzer'},
+    'date':       {'type': 'date'},
+    'datetime':   {'type': 'date'},
 
+    'location':   {'type': 'geo_point'},
+    'boolean':    {'type': 'boolean'},
+    'float':      {'type': 'float'},
+    'long':       {'type': 'long'},
+    'integer':    {'type': 'long'},
+}
 class Elasticsearch5SearchBackend(ElasticsearchSearchBackend):
+
+    def build_schema(self, fields):
+        content_field_name = ''
+        mapping = {
+            DJANGO_CT: {'type': 'text', 'index': 'not_analyzed', 'include_in_all': False},
+            DJANGO_ID: {'type': 'text', 'index': 'not_analyzed', 'include_in_all': False},
+        }
+
+        for field_name, field_class in fields.items():
+            field_mapping = FIELD_MAPPINGS.get(field_class.field_type, DEFAULT_FIELD_MAPPING).copy()
+            if field_class.boost != 1.0:
+                field_mapping['boost'] = field_class.boost
+
+            if field_class.document is True:
+                content_field_name = field_class.index_fieldname
+
+            # Do this last to override `text` fields.
+            if field_mapping['type'] == 'text':
+                if field_class.indexed is False or hasattr(field_class, 'facet_for'):
+                    field_mapping['index'] = 'not_analyzed'
+                    del field_mapping['analyzer']
+
+            mapping[field_class.index_fieldname] = field_mapping
+
+        return (content_field_name, mapping)
 
     def build_search_kwargs(self, query_string, sort_by=None, start_offset=0, end_offset=None,
                             fields='', highlight=False, facets=None,
@@ -120,7 +160,7 @@ class Elasticsearch5SearchBackend(ElasticsearchSearchBackend):
             narrow_queries = set()
 
         if facets is not None:
-            kwargs.setdefault('facets', {})
+            kwargs.setdefault('aggregations', {})
 
             for facet_fieldname, extra_options in facets.items():
                 facet_options = {
@@ -136,7 +176,7 @@ class Elasticsearch5SearchBackend(ElasticsearchSearchBackend):
                 if 'facet_filter' in extra_options:
                     facet_options['facet_filter'] = extra_options.pop('facet_filter')
                 facet_options['terms'].update(extra_options)
-                kwargs['facets'][facet_fieldname] = facet_options
+                kwargs['aggregations'][facet_fieldname] = facet_options
 
         if date_facets is not None:
             kwargs.setdefault('facets', {})
@@ -177,6 +217,7 @@ class Elasticsearch5SearchBackend(ElasticsearchSearchBackend):
                     },
                 }
 
+        # import ipdb; ipdb.set_trace()
         if limit_to_registered_models is None:
             limit_to_registered_models = getattr(settings, 'HAYSTACK_LIMIT_TO_REGISTERED_MODELS', True)
 
@@ -288,6 +329,7 @@ class Elasticsearch5SearchBackend(ElasticsearchSearchBackend):
 
         end_offset = kwargs.get('end_offset')
         start_offset = kwargs.get('start_offset', 0)
+
         if end_offset is not None and end_offset > start_offset:
             search_kwargs['size'] = end_offset - start_offset
 
@@ -305,6 +347,95 @@ class Elasticsearch5SearchBackend(ElasticsearchSearchBackend):
                                      result_class=kwargs.get('result_class', SearchResult),
                                      distance_point=kwargs.get('distance_point'),
                                      geo_sort=geo_sort)
+
+    def _process_results(self, raw_results, highlight=False, result_class=None, distance_point=None, geo_sort=False):
+        from haystack import connections
+        results = []
+        hits = raw_results.get('hits', {}).get('total', 0)
+        facets = {}
+        spelling_suggestion = None
+
+        if result_class is None:
+            result_class = SearchResult
+
+        if self.include_spelling and 'suggest' in raw_results:
+            raw_suggest = raw_results['suggest'].get('suggest')
+            if raw_suggest:
+                spelling_suggestion = ' '.join([word['text'] if len(word['options']) == 0 else word['options'][0]['text'] for word in raw_suggest])
+
+        if 'aggregations' in raw_results:
+            facets = {
+                'fields': {},
+                'dates': {},
+                'queries': {},
+            }
+
+            # ES can return negative timestamps for pre-1970 data. Handle it.
+            def from_timestamp(tm):
+                if tm >= 0:
+                    return datetime.utcfromtimestamp(tm)
+                else:
+                    return datetime(1970, 1, 1) + timedelta(seconds=tm)
+
+            for facet_fieldname, facet_info in raw_results['aggregations'].items():
+                if facet_info.get('_type', 'terms') == 'terms':
+                    facets['fields'][facet_fieldname] = [(individual['key'], individual['doc_count']) for individual in facet_info['buckets']]
+
+                elif facet_info.get('_type', 'terms') == 'date_histogram':
+                    # Elasticsearch provides UTC timestamps with an extra three
+                    # decimals of precision, which datetime barfs on.
+                    facets['dates'][facet_fieldname] = [(from_timestamp(individual['time'] / 1000),
+                                                         individual['count'])
+                                                        for individual in facet_info['entries']]
+                elif facet_info.get('_type', 'terms') == 'query':
+                    facets['queries'][facet_fieldname] = facet_info['count']
+
+        unified_index = connections[self.connection_alias].get_unified_index()
+        indexed_models = unified_index.get_indexed_models()
+        content_field = unified_index.document_field
+
+        for raw_result in raw_results.get('hits', {}).get('hits', []):
+            source = raw_result['_source']
+            app_label, model_name = source[DJANGO_CT].split('.')
+            additional_fields = {}
+            model = haystack_get_model(app_label, model_name)
+
+            if model and model in indexed_models:
+                for key, value in source.items():
+                    index = unified_index.get_index(model)
+                    string_key = str(key)
+
+                    if string_key in index.fields and hasattr(index.fields[string_key], 'convert'):
+                        additional_fields[string_key] = index.fields[string_key].convert(value)
+                    else:
+                        additional_fields[string_key] = self._to_python(value)
+
+                del(additional_fields[DJANGO_CT])
+                del(additional_fields[DJANGO_ID])
+
+                if 'highlight' in raw_result:
+                    additional_fields['highlighted'] = raw_result['highlight'].get(content_field, '')
+
+                if distance_point:
+                    additional_fields['_point_of_origin'] = distance_point
+
+                    if geo_sort and raw_result.get('sort'):
+                        from haystack.utils.geo import Distance
+                        additional_fields['_distance'] = Distance(km=float(raw_result['sort'][0]))
+                    else:
+                        additional_fields['_distance'] = None
+
+                result = result_class(app_label, model_name, source[DJANGO_ID], raw_result['_score'], **additional_fields)
+                results.append(result)
+            else:
+                hits -= 1
+
+        return {
+            'results': results,
+            'hits': hits,
+            'facets': facets,
+            'spelling_suggestion': spelling_suggestion,
+        }
 
 
 class Elasticsearch5SearchQuery(ElasticsearchSearchQuery):
