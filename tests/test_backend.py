@@ -49,6 +49,8 @@ except ImportError:
 
 
 # TODO implement get_connection_params
+# TODO spelling suggestion should be test with both status of the INCLUDE_SPELLING;
+# current is always True
 # import sys
 # import ipdb; ipdb.set_trace()
 
@@ -94,7 +96,6 @@ class TestTheSettings(TestCase):
 class Elasticsearch5BackendTest(TestCase):
 
     maxDiff = None
-
 
     def setUp(self):
 
@@ -351,7 +352,8 @@ class Elasticsearch5BackendTest(TestCase):
 
     def test_spelling2(self):
         self.search_backend.update(self.smmi, self.sample_objs)
-        self.assertEqual(self.search_backend.search('arf', spelling_query='indexyd')['spelling_suggestion'], 'indexed')
+        suggestion = self.search_backend.search('arf', spelling_query='indexyd')['spelling_suggestion']
+        self.assertEqual(suggestion, 'indexed')
 
     def test_facet_search1(self):
         self.search_backend.update(self.smmi, self.sample_objs)
@@ -406,16 +408,17 @@ class Elasticsearch5BackendTest(TestCase):
         self.assertEqual(self.search_backend.search('*:*', limit_to_registered_models=False)['hits'], 3)
         self.assertEqual(sorted([result.pk for result in self.search_backend.search('*:*', limit_to_registered_models=False)['results']]), ['1', '2', '3'])
 
+    @override_settings(HAYSTACK_LIMIT_TO_REGISTERED_MODELS=False)
     def test_check_the_use_limit_to_registered_models2(self):
-        old_limit_to_registered_models = getattr(settings, 'HAYSTACK_LIMIT_TO_REGISTERED_MODELS', True)
-        settings.HAYSTACK_LIMIT_TO_REGISTERED_MODELS = False
+
+        self.search_backend.update(self.smmi, self.sample_objs)
 
         self.assertEqual(self.search_backend.search(''), {'hits': 0, 'results': []})
-        self.assertEqual(self.search_backend.search('*:*')['hits'], 3)
-        self.assertEqual(sorted([result.pk for result in self.search_backend.search('*:*')['results']]), ['1', '2', '3'])
 
-        # Restore.
-        settings.HAYSTACK_LIMIT_TO_REGISTERED_MODELS = old_limit_to_registered_models
+        result = sorted([result.pk for result in self.search_backend.search('*:*')['results']])
+        expected = ['1', '2', '3']
+
+        self.assertEqual(result, expected)
 
 
     # TODO
