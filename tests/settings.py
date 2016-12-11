@@ -99,3 +99,61 @@ HAYSTACK_CONNECTIONS = {
         'INCLUDE_SPELLING': True,
     }
 }
+
+import logging
+
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'verbose': {
+            'format' : "[%(asctime)s] %(levelname)s [%(name)s:%(lineno)s] %(message)s",
+            'datefmt' : "%d/%b/%Y %H:%M:%S"
+        },
+        'simple': {
+            'format': '%(levelname)s %(message)s'
+        },
+    },
+
+    'handlers': {
+        'file': {
+            'level': 'DEBUG',
+            'class': 'logging.FileHandler',
+            'filename': 'mysite.log',
+            'formatter': 'verbose'
+        },
+
+        'stream': {
+            'level': 'DEBUG',
+            'class': 'logging.StreamHandler',
+            'formatter': 'verbose'
+        },
+
+        'elastic_log': {
+            'level': 'INFO',
+            'class': 'logging.StreamHandler',
+            'formatter': 'verbose'
+        },
+    },
+
+    'loggers': {
+        # for celery
+        # http://stackoverflow.com/questions/33903202/no-handlers-could-be-found-for-logger-elasticsearch-trace
+        'elasticsearch.trace': {
+            'handlers':['elastic_log', 'stream'],
+            'level':'INFO',
+        },
+
+        'django': {
+            'handlers':['file'],
+            'propagate': True,
+            'level':'DEBUG',
+        },
+
+        ### Applications
+        'tests.test_app': {
+            'handlers': ['file', 'stream'],
+            'level': 'DEBUG',
+        },
+    }
+}
