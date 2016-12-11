@@ -1,0 +1,74 @@
+[
+  {
+    "pk": 1,
+    "model": "test_app.mocktag",
+    "fields": {
+      "name": "primary"
+    }
+  },
+  {
+    "pk": 2,
+    "model": "test_app.mocktag",
+    "fields": {
+      "name": "secondary"
+    }
+  },
+  {
+    "pk": 1,
+    "model": "test_app.mockmodel",
+    "fields": {
+      "author": "daniel1",
+      "foo": "bar",
+      "pub_date": "2009-03-17 06:00:00",
+      "tag": 1
+    }
+  },
+  {
+    "pk": 2,
+    "model": "test_app.mockmodel",
+    "fields": {
+      "author": "daniel2",
+      "foo": "bar",
+      "pub_date": "2009-03-17 07:00:00",
+      "tag": 1
+    }
+  },
+  {
+    "pk": 3,
+    "model": "test_app.mockmodel",
+    "fields": {
+      "author": "daniel3",
+      "foo": "bar",
+      "pub_date": "2009-03-17 08:00:00",
+      "tag": 2
+    }
+  },
+  {
+    "pk": "sometext",
+    "model": "test_app.charpkmockmodel",
+    "fields": {
+    }
+  },
+  {
+    "pk": "1234",
+    "model": "test_app.charpkmockmodel",
+    "fields": {
+    }
+  },
+  {
+    "pk": 1,
+    "model": "test_app.afifthmockmodel",
+    "fields": {
+      "author": "sam1",
+      "deleted": false
+    }
+  },
+  {
+    "pk": 2,
+    "model": "test_app.afifthmockmodel",
+    "fields": {
+      "author": "sam2",
+      "deleted": true
+    }
+  }
+]

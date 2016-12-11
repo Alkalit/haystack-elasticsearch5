@@ -71,9 +71,8 @@ class ElasticsearchAnotherMockModelSearchIndex(indexes.SearchIndex, indexes.Inde
 
 
 class ElasticsearchBoostMockSearchIndex(indexes.SearchIndex, indexes.Indexable):
-    text = indexes.CharField(
-        document=True, use_template=True,
-        template_name='search/indexes/core/mockmodel_template.txt'
+    text = indexes.CharField( document=True, use_template=True,
+        template_name='search/indexes/test_app/mockmodel_template.txt'
     )
     author = indexes.CharField(model_attr='author', weight=2.0)
     editor = indexes.CharField(model_attr='editor')
