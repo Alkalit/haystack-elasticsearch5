@@ -96,5 +96,6 @@ HAYSTACK_CONNECTIONS = {
         'ENGINE': 'haystack_elasticsearch5.Elasticsearch5SearchEngine',
         'URL': 'http://127.0.0.1:9200/',
         'INDEX_NAME': 'test_backend',
+        'INCLUDE_SPELLING': True,
     }
 }
