@@ -4,6 +4,11 @@ Elasticsearch 5 backend for haystack.
 
 Currently tested for python 3.5 and Django 1.10
 
+How to install
+==============
+
+``pip install django-haystack-elasticsearch5``
+
 Run tests
 =========
 
