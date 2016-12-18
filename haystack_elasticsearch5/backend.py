@@ -393,7 +393,6 @@ class Elasticsearch5SearchBackend(ElasticsearchSearchBackend):
                     facet_type = 'terms'
 
                 if facet_type == 'terms':
-                    import ipdb; ipdb.set_trace()
                     facets['fields'][facet_fieldname] = [(bucket['key'], bucket['doc_count']) for bucket in facet_info['buckets']]
 
                 elif facet_type == 'haystack_date_histogram':
