@@ -97,7 +97,7 @@ class Elasticsearch5SearchBackend(ElasticsearchSearchBackend):
             if isinstance(fields, (list, set)):
                 fields = " ".join(fields)
 
-            kwargs['fields'] = fields
+            kwargs['stored_fields'] = fields
 
         if sort_by is not None:
             order_list = []
@@ -144,7 +144,6 @@ class Elasticsearch5SearchBackend(ElasticsearchSearchBackend):
             if isinstance(highlight, dict):
                 kwargs['highlight'].update(highlight)
 
-        # import ipdb; ipdb.set_trace()
         if self.include_spelling:
             kwargs['suggest'] = {
                 'suggest': {
@@ -179,7 +178,7 @@ class Elasticsearch5SearchBackend(ElasticsearchSearchBackend):
                 kwargs['aggregations'][facet_fieldname] = facet_options
 
         if date_facets is not None:
-            kwargs.setdefault('facets', {})
+            kwargs.setdefault('aggregations', {})
 
             for facet_fieldname, value in date_facets.items():
                 # Need to detect on gap_by & only add amount if it's more than one.
@@ -190,7 +189,7 @@ class Elasticsearch5SearchBackend(ElasticsearchSearchBackend):
                     # Just the first character is valid for use.
                     interval = "%s%s" % (value['gap_amount'], interval[:1])
 
-                kwargs['facets'][facet_fieldname] = {
+                kwargs['aggregations'][facet_fieldname] = {
                     'date_histogram': {
                         'field': facet_fieldname,
                         'interval': interval,
@@ -205,6 +204,21 @@ class Elasticsearch5SearchBackend(ElasticsearchSearchBackend):
                     }
                 }
 
+
+
+
+                # "aggregations" : {
+                #     "<aggregation_name>" : {
+                #         "<aggregation_type>" : {
+                #             <aggregation_body>
+                #         }
+                #         [,"meta" : {  [<meta_data_body>] } ]?
+                #         [,"aggregations" : { [<sub_aggregation>]+ } ]?
+                #     }
+
+                #     [,"<aggregation_name_2>" : { ... } ]*
+                # }
+
         if query_facets is not None:
             kwargs.setdefault('facets', {})
 
@@ -217,7 +231,6 @@ class Elasticsearch5SearchBackend(ElasticsearchSearchBackend):
                     },
                 }
 
-        # import ipdb; ipdb.set_trace()
         if limit_to_registered_models is None:
             limit_to_registered_models = getattr(settings, 'HAYSTACK_LIMIT_TO_REGISTERED_MODELS', True)
 
@@ -234,16 +247,11 @@ class Elasticsearch5SearchBackend(ElasticsearchSearchBackend):
             filters.append({"terms": {DJANGO_CT: model_choices}})
 
         for q in narrow_queries:
-            filters.append({
-                'fquery': {
-                    'query': {
-                        'query_string': {
-                            'query': q
-                        },
-                    },
-                    '_cache': True,
+            filters.append(
+                {
+                    'query_string': { 'query': q }
                 }
-            })
+            )
 
         if within is not None:
             from haystack.utils.geo import generate_bounding_box
@@ -301,7 +309,6 @@ class Elasticsearch5SearchBackend(ElasticsearchSearchBackend):
         if extra_kwargs:
             kwargs.update(extra_kwargs)
 
-        # import ipdb; ipdb.set_trace()
         return kwargs
 
     @log_query
