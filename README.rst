@@ -8,3 +8,9 @@ Run tests
 =========
 
 Use ``tox`` or  ``django-admin test --settings=tests.settings``. In second case environment should have django and haystack installed.
+
+
+How to port from elasticsearch 1
+================================
+- First, you need to rebuild index
+- Remove ``faceted=True`` from fields in all your indexes.
