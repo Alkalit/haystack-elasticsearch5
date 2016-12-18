@@ -9,6 +9,20 @@ How to install
 
 ``pip install django-haystack-elasticsearch5``
 
+In your ``settings.py``
+
+
+::
+
+    HAYSTACK_CONNECTIONS = {
+        'default': {
+            'ENGINE': 'haystack_elasticsearch5.Elasticsearch5SearchEngine',
+            'URL': 'http://127.0.0.1:9200/',
+            'INDEX_NAME': 'test_backend',
+        }
+    }
+
+
 Run tests
 =========
 
