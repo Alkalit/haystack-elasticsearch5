@@ -17,6 +17,9 @@ from haystack.utils.app_loading import haystack_get_model
 
 __all__ = ['Elasticsearch5SearchBackend', 'Elasticsearch5SearchEngine']
 
+DATE_HISTOGRAM_FIELD_NAME_SUFFIX = '_haystack_date_histogram'
+DATE_RANGE_FIELD_NAME_SUFFIX = '_haystack_date_range'
+
 DEFAULT_FIELD_MAPPING = {'type': 'text', 'analyzer': 'snowball', 'fielddata': True}
 FIELD_MAPPINGS = {
     'edge_ngram': {'type': 'text', 'analyzer': 'edgengram_analyzer'},
@@ -189,46 +192,44 @@ class Elasticsearch5SearchBackend(ElasticsearchSearchBackend):
                     # Just the first character is valid for use.
                     interval = "%s%s" % (value['gap_amount'], interval[:1])
 
-                kwargs['aggregations'][facet_fieldname] = {
+                date_histogram_aggregation_name = "{0}{1}".format(facet_fieldname, DATE_HISTOGRAM_FIELD_NAME_SUFFIX)
+                date_range_aggregation_name = "{0}{1}".format(facet_fieldname, DATE_RANGE_FIELD_NAME_SUFFIX)
+
+                kwargs['aggregations'][date_histogram_aggregation_name] = {
+                    'meta': {
+                        '_type': 'haystack_date_histogram',
+                    },
                     'date_histogram': {
                         'field': facet_fieldname,
                         'interval': interval,
                     },
-                    'facet_filter': {
-                        "range": {
-                            facet_fieldname: {
+                }
+
+                kwargs['aggregations'][date_range_aggregation_name] = {
+                    'meta': {
+                        '_type': 'haystack_date_range',
+                    },
+                    'date_range': {  # agg type
+                        'field': facet_fieldname,
+                        'ranges': [
+                            {
                                 'from': self._from_python(value.get('start_date')),
                                 'to': self._from_python(value.get('end_date')),
                             }
-                        }
+                        ]
                     }
                 }
 
-
-
-
-                # "aggregations" : {
-                #     "<aggregation_name>" : {
-                #         "<aggregation_type>" : {
-                #             <aggregation_body>
-                #         }
-                #         [,"meta" : {  [<meta_data_body>] } ]?
-                #         [,"aggregations" : { [<sub_aggregation>]+ } ]?
-                #     }
-
-                #     [,"<aggregation_name_2>" : { ... } ]*
-                # }
-
         if query_facets is not None:
-            kwargs.setdefault('facets', {})
+            kwargs.setdefault('aggregations', {})
 
             for facet_fieldname, value in query_facets:
-                kwargs['facets'][facet_fieldname] = {
-                    'query': {
-                        'query_string': {
-                            'query': value,
-                        }
-                    },
+                kwargs['aggregations'][facet_fieldname] = {
+                   'filter': {
+                       'query_string': {
+                           'query': value,
+                       }
+                   }
                 }
 
         if limit_to_registered_models is None:
@@ -385,16 +386,26 @@ class Elasticsearch5SearchBackend(ElasticsearchSearchBackend):
                     return datetime(1970, 1, 1) + timedelta(seconds=tm)
 
             for facet_fieldname, facet_info in raw_results['aggregations'].items():
-                if facet_info.get('_type', 'terms') == 'terms':
-                    facets['fields'][facet_fieldname] = [(individual['key'], individual['doc_count']) for individual in facet_info['buckets']]
 
-                elif facet_info.get('_type', 'terms') == 'date_histogram':
+                try:
+                    facet_type = facet_info['meta']['_type']
+                except KeyError:
+                    facet_type = 'terms'
+
+                if facet_type == 'terms':
+                    import ipdb; ipdb.set_trace()
+                    facets['fields'][facet_fieldname] = [(bucket['key'], bucket['doc_count']) for bucket in facet_info['buckets']]
+
+                elif facet_type == 'haystack_date_histogram':
                     # Elasticsearch provides UTC timestamps with an extra three
                     # decimals of precision, which datetime barfs on.
-                    facets['dates'][facet_fieldname] = [(from_timestamp(individual['time'] / 1000),
-                                                         individual['count'])
-                                                        for individual in facet_info['entries']]
-                elif facet_info.get('_type', 'terms') == 'query':
+                    dates = [(from_timestamp(bucket['key'] / 1000), bucket['doc_count']) for bucket in facet_info['buckets']]
+                    facets['dates'][facet_fieldname[:-len(DATE_HISTOGRAM_FIELD_NAME_SUFFIX)]] = dates
+
+                elif facet_type == 'haystack_date_range':
+                    pass
+
+                elif facet_type == 'query':
                     facets['queries'][facet_fieldname] = facet_info['count']
 
         unified_index = connections[self.connection_alias].get_unified_index()

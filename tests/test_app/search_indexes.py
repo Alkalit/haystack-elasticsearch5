@@ -94,7 +94,7 @@ class ElasticsearchFacetingMockSearchIndex(indexes.SearchIndex, indexes.Indexabl
     text = indexes.CharField(document=True)
     author = indexes.CharField(model_attr='author', faceted=True)
     editor = indexes.CharField(model_attr='editor', faceted=True)
-    pub_date = indexes.DateField(model_attr='pub_date', faceted=True)
+    pub_date = indexes.DateField(model_attr='pub_date')
     facet_field = indexes.FacetCharField(model_attr='author')
 
     def prepare_text(self, obj):

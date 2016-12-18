@@ -391,7 +391,8 @@ class Elasticsearch5BackendTest(TestCase):
         self.search_backend.update(self.smmi, self.sample_objs)
 
         results = self.search_backend.search('Index', query_facets=[('name', '[* TO e]')])
-        self.assertEqual(results['facets']['queries'], {u'name': 3})
+        import ipdb; ipdb.set_trace()
+        self.assertEqual(results['facets']['buckets'], {u'name': 3})
 
     def test_narrow1(self):
         self.search_backend.update(self.smmi, self.sample_objs)
@@ -1580,8 +1581,7 @@ class ElasticsearchFacetingTestCase(TestCase):
                 (datetime.datetime(2013, 9, 4), 2),
             ]
 
-        # import ipdb; ipdb.set_trace()
-        self.assertEqual(counts['dates']['pub_date'], expected)
+        self.assertEqual(sorted(counts['dates']['pub_date']), expected)
         # By month
         counts = SearchQuerySet('default').date_facet('pub_date', start_date=start, end_date=end, gap_by='month').facet_counts()
 
