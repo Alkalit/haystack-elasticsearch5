@@ -1142,33 +1142,37 @@ class LiveElasticsearchMoreLikeThisTestCase(TestCase):
         connections['default']._index = self.old_ui
         super(LiveElasticsearchMoreLikeThisTestCase, self).tearDown()
 
-    def test_more_like_this(self):
+    def test_simple_more_like_this(self):
+
         mlt = self.sqs.more_like_this(MockModel.objects.get(pk=1))
-        self.assertEqual(mlt.count(), 4)
         self.assertEqual(set([result.pk for result in mlt]), set([u'2', u'6', u'16', u'23']))
-        self.assertEqual(len([result.pk for result in mlt]), 4)
 
-        alt_mlt = self.sqs.filter(name='daniel3').more_like_this(MockModel.objects.get(pk=2))
-        self.assertEqual(alt_mlt.count(), 6)
-        self.assertEqual(set([result.pk for result in alt_mlt]), set([u'2', u'6', u'16', u'23', u'1', u'11']))
-        self.assertEqual(len([result.pk for result in alt_mlt]), 6)
+    def test_more_like_this_with_filtering(self):
 
-        alt_mlt_with_models = self.sqs.models(MockModel).more_like_this(MockModel.objects.get(pk=1))
-        self.assertEqual(alt_mlt_with_models.count(), 4)
-        self.assertEqual(set([result.pk for result in alt_mlt_with_models]), set([u'2', u'6', u'16', u'23']))
-        self.assertEqual(len([result.pk for result in alt_mlt_with_models]), 4)
+        mlt = self.sqs.filter(name='daniel3').more_like_this(MockModel.objects.get(pk=2))
+        self.assertEqual(set([result.pk for result in mlt]), set([u'2', u'6', u'16', u'23', u'1', u'11']))
 
-        if hasattr(MockModel.objects, 'defer'):
-            # Make sure MLT works with deferred bits.
-            mi = MockModel.objects.defer('foo').get(pk=1)
-            self.assertEqual(mi._deferred, True)
-            deferred = self.sqs.models(MockModel).more_like_this(mi)
-            self.assertEqual(deferred.count(), 0)
-            self.assertEqual([result.pk for result in deferred], [])
-            self.assertEqual(len([result.pk for result in deferred]), 0)
+    def test_more_like_this_within_set_of_a_model(self):
 
-        # Ensure that swapping the ``result_class`` works.
-        self.assertTrue(isinstance(self.sqs.result_class(MockSearchResult).more_like_this(MockModel.objects.get(pk=1))[0], MockSearchResult))
+        mlt = self.sqs.models(MockModel).more_like_this(MockModel.objects.get(pk=1))
+        self.assertEqual(set([result.pk for result in mlt]), set([u'2', u'6', u'16', u'23']))
+
+    # TODO does this decorator realy need?
+    @unittest.skipUnless(hasattr(MockModel.objects, 'defer'), "Models should support deferring")
+    def test_more_like_this_with_deferred_models(self):
+
+        mi = MockModel.objects.defer('foo').get(pk=1)
+
+        deferred = self.sqs.models(MockModel).more_like_this(mi)
+
+        self.assertEqual(deferred.count(), 0)
+        self.assertEqual([result.pk for result in deferred], [])
+        self.assertEqual(len([result.pk for result in deferred]), 0)
+
+    def test_more_like_this_ensure_that_swapping_the_result_class_works(self):
+
+        instance = self.sqs.result_class(MockSearchResult).more_like_this(MockModel.objects.get(pk=1))[0]
+        self.assertIsInstance(instance, MockSearchResult)
 
 
 class LiveElasticsearchAutocompleteTestCase(TestCase):

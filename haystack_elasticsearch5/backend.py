@@ -142,7 +142,7 @@ class Elasticsearch5SearchBackend(ElasticsearchSearchBackend):
             }
 
         try:
-            raw_results = self.conn.search(index=self.index_name, doc_type='modelresult',  body=more_like_this_query, _source=True, **params)
+            raw_results = self.conn.search(index=self.index_name, doc_type='modelresult', body=more_like_this_query, _source=True, **params)
         except elasticsearch.TransportError as e:
             if not self.silently_fail:
                 raise
