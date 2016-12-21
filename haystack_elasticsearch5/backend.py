@@ -11,7 +11,7 @@ from haystack.backends.elasticsearch_backend import ElasticsearchSearchBackend, 
 from haystack.backends import BaseEngine, log_query
 from haystack.models import SearchResult
 from haystack.constants import DEFAULT_OPERATOR, DJANGO_CT, DJANGO_ID, FUZZY_MAX_EXPANSIONS
-from haystack.utils import get_model_ct
+from haystack.utils import get_identifier, get_model_ct, log as logging
 from haystack.utils.app_loading import haystack_get_model
 
 
@@ -59,6 +59,98 @@ class Elasticsearch5SearchBackend(ElasticsearchSearchBackend):
             mapping[field_class.index_fieldname] = field_mapping
 
         return (content_field_name, mapping)
+
+    def more_like_this(self,
+                       model_instance,
+                       additional_query_string=None,
+                       start_offset=0,
+                       end_offset=None,
+                       models=None,
+                       limit_to_registered_models=None,
+                       result_class=None,
+                       **kwargs):
+
+        from haystack import connections
+
+        if not self.setup_complete:
+            self.setup()
+
+        # Deferred models will have a different class ("RealClass_Deferred_fieldname")
+        # which won't be in our registry:
+        model_klass = model_instance._meta.concrete_model
+
+        index = connections[self.connection_alias].get_unified_index().get_index(model_klass)
+        field_name = index.get_content_field()
+        params = {}
+
+        if start_offset is not None:
+            params['from_'] = start_offset
+
+        if end_offset is not None:
+            params['size'] = end_offset - start_offset
+
+        doc_id = get_identifier(model_instance)
+
+        more_like_this_query = {
+            'query': {
+                'more_like_this': {
+                    'fields': [field_name],
+                    'like': [{
+                        "_id": doc_id
+                    }]
+                }
+            }
+        }
+
+        additional_filters = []
+
+        if additional_query_string and additional_query_string != '*:*':
+            additional_filter = \
+            {
+                "query_string": {"query": additional_query_string}
+            }
+
+            additional_filters.append(additional_filter)
+
+        if limit_to_registered_models is None:
+            limit_to_registered_models = getattr(settings, 'HAYSTACK_LIMIT_TO_REGISTERED_MODELS', True)
+
+        if models:
+            content_types = [get_model_ct(model) for model in models]
+        elif limit_to_registered_models:
+            content_types = self.build_models_list()
+        else:
+            content_types = []
+
+        if content_types:
+            model_filter = {"terms": {DJANGO_CT: content_types}}
+            additional_filters.append(model_filter)
+
+        if additional_filters:
+            more_like_this_query = \
+            {
+                "query": {
+                    "bool": {
+                        'must': more_like_this_query['query'],
+                        'filter': {
+                            'bool': {
+                                'must': additional_filters
+                            }
+                        }
+                    }
+                }
+            }
+
+        try:
+            raw_results = self.conn.search(index=self.index_name, doc_type='modelresult',  body=more_like_this_query, _source=True, **params)
+        except elasticsearch.TransportError as e:
+            if not self.silently_fail:
+                raise
+
+            self.log.error("Failed to fetch More Like This from Elasticsearch for document '%s': %s", doc_id, e, exc_info=True)
+            raw_results = {}
+
+        return self._process_results(raw_results, result_class=result_class)
 
     def build_search_kwargs(self, query_string, sort_by=None, start_offset=0, end_offset=None,
                             fields='', highlight=False, facets=None,

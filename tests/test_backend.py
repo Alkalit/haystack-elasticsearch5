@@ -391,7 +391,6 @@ class Elasticsearch5BackendTest(TestCase):
         self.search_backend.update(self.smmi, self.sample_objs)
 
         results = self.search_backend.search('Index', query_facets=[('name', '[* TO e]')])
-        import ipdb; ipdb.set_trace()
         self.assertEqual(results['facets']['buckets'], {u'name': 3})
 
     def test_narrow1(self):
@@ -459,8 +458,6 @@ class Elasticsearch5BackendTest(TestCase):
         self.search_backend.update(self.smmi, self.sample_objs)
         self.assertEqual(self.raw_search('*:*')['hits']['total'], 3)
 
-        # A functional MLT example with enough data to work is below. Rely on
-        # this to ensure the API is correct enough.
         self.assertEqual(self.search_backend.more_like_this(self.sample_objs[0])['hits'], 0)
         self.assertEqual([result.pk for result in self.search_backend.more_like_this(self.sample_objs[0])['results']], [])
 
