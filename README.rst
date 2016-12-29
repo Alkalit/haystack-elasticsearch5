@@ -31,5 +31,5 @@ Use ``tox`` or  ``django-admin test --settings=tests.settings``. In second case 
 
 How to port from elasticsearch 1
 ================================
-- First, you need to rebuild index
-- Remove ``faceted=True`` from fields in all your indexes.
+- Remove ``faceted=True`` from fields in all your indexes. And you probably will need to replace all ``FacetNameField`` common analogue.
+- Then rebuild index
